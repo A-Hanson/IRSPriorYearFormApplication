@@ -87,8 +87,7 @@ if __name__ == "__main__":
     table_data = []
     # input index page
     table_data += get_all_rows_of_data_from_page(index_table)
-    Get the total number of files
-    # find total number of documents
+    # Get the total number of files
     showByColumn = index_soup.find("th", class_="ShowByColumn")
     value_in_column = showByColumn.get_text().strip()
     total_num_files = int(value_in_column[-12:-10] + value_in_column[-9:-6])  
