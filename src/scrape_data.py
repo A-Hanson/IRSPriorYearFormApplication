@@ -8,6 +8,7 @@ import os
 
 descending = "&isDescending=false"
 parser = 'html.parser'
+start_of_url = "https://apps.irs.gov/app/picklist/list/priorFormPublication.html?resultsPerPage=200&sortColumn=sortOrder&indexOfFirstRow="
 
 class IRSWebAccessor:
     irs_url = "https://apps.irs.gov/app/picklist/list/priorFormPublication.html?"
@@ -150,7 +151,7 @@ def get_pdf_links(table, term, start, end, num_files):
         # web page setting: display 200 results per page
         pages = np.arange(200, (num_files + 1), 200)
         for page in pages:
-            page = requests.get("https://apps.irs.gov/app/picklist/list/priorFormPublication.html?resultsPerPage=200&sortColumn=sortOrder&indexOfFirstRow=" + str(page) + "&criteria=formNumber&value=" + term + descending)
+            page = requests.get(start_of_url + str(page) + "&criteria=formNumber&value=" + term + descending)
             soup_local = BeautifulSoup(page.content, parser)
             page_table = soup_local.find("table", class_="picklist-dataTable")
             links += get_page_links(page_table, term, start, end)
@@ -229,9 +230,9 @@ def get_all_pages_from_website(get_all, num_files, data, headers, value):
     for page in pages:
         print("Scraping new page...")
         if (get_all):
-            page = requests.get("https://apps.irs.gov/app/picklist/list/priorFormPublication.html?resultsPerPage=200&sortColumn=sortOrder&indexOfFirstRow=" + str(page) + "&criteria=&value=&isDescending=false")
+            page = requests.get(start_of_url + str(page) + "&criteria=&value=&isDescending=false")
         else:
-            page = requests.get("https://apps.irs.gov/app/picklist/list/priorFormPublication.html?resultsPerPage=200&sortColumn=sortOrder&indexOfFirstRow=" + str(page) + "&criteria=formNumber&value=" + value + self.descending)
+            page = requests.get(start_of_url + str(page) + "&criteria=formNumber&value=" + value + self.descending)
         soup_local = BeautifulSoup(page.content, parser)
         page_table = soup_local.find("table", class_="picklist-dataTable")
         data += get_all_rows_of_data_from_page(page_table, headers)
