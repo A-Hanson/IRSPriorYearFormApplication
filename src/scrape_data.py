@@ -18,6 +18,8 @@ class IRSWebAccessor:
         self.cleaned_data = []
 
     def scrape_by_search_terms(self, terms):
+        for term in terms:
+            term = term.strip()
         self.search_terms += terms
         if len(self.search_terms) == 0:
             print("No search terms used. Did not attempt to collect anything.")
@@ -39,7 +41,8 @@ class IRSWebAccessor:
                 # Get the total number of files
                 total_num_files = get_number_of_documents_from_search(index_soup) 
                 get_all_pages_from_website(get_all=False, num_files=total_num_files, data=self.search_data, headers=self.search_headers, value=i)
-        self.cleaned_data += condense_data_to_include_year_range_with_search_terms(table=self.search_data, terms=self.search_terms)
+        for term in self.search_terms:
+            self.cleaned_data += condense_data_to_include_year_range_with_search_terms(table=self.search_data, term=term)
         
         
     def scrape_all_forms(self):
@@ -58,10 +61,11 @@ class IRSWebAccessor:
     def write_to_json(self, file_name):
         ''' writes data from cleaned search data to 
         json file specified within parameters in sibling data file'''
-        directory = os.path.dirname(os.getcwd())
+        directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         pathfile = os.path.join(directory,'data', file_name)
         with open(pathfile, 'w') as outfile:
             json.dump(self.cleaned_data, outfile)
+        print("Writing to file complete.")
 
     def clear(self):
         self.search_headers.clear()
@@ -70,11 +74,21 @@ class IRSWebAccessor:
         self.cleaned_data.clear()
         print("Cleared")
 
-# Helper Methods    
+# Helper Methods
+def clean_search_terms(user_input):
+    '''
+    Parameters: String object
+    Returns: List of Strings
+    '''    
+    temp_list = []
+    for i in user_input.split(","):
+        i = i.strip()
+        temp_list.append(i)
+    return temp_list
 
 def get_table_headers(table):
     '''
-    Parameters: takes in an object
+    Parameters: takes in a soup object
     Returns: List of Strings
     '''
     table_headers = []
@@ -130,12 +144,12 @@ def get_all_pages_from_website(get_all, num_files, data, headers, value):
         page_table = soup_local.find("table", class_="picklist-dataTable")
         data += get_all_rows_of_data_from_page(page_table, headers)
         num_pages += 1
-        print(str(num_pages) + " scrapped so far. Now for a little nap between 2 - 50 seconds.")
+        print(str(num_pages) + " pages scrapped so far for " + value + " . Now for a little nap between 2 - 50 seconds.")
         # Be nice to their servers
         sleep(randint(2,50))
     return data
 
-def condense_data_to_include_year_range_with_search_terms(table, terms):
+def condense_data_to_include_year_range_with_search_terms(table, term):
     '''
     Parameters: list of dicts : table, boolean : has_search_terms, list of strings : terms
     Iterates through set of scraped data
@@ -143,21 +157,13 @@ def condense_data_to_include_year_range_with_search_terms(table, terms):
     Filters to exact matches for form number
     Returns: list of dicts
     '''
-    num_terms = len(terms)
     temp_list = []
     keys = [list(table[0])]
     form_num = keys[0][0]
     form_title = keys[0][1]
     year = keys[0][2]
-    start_point = 0
     table_length = len(table)
-
-    for i in range(table_length + 1):
-        ######## PICK UP FROM HERE #######
-        if table[i][form_num] == terms[0]:
-            first_row = table[i]
-            start_point = i + 1
-            break
+    first_row = table[0]
     first_dict = dict( [ 
         (form_num, first_row[form_num]),
         (form_title, first_row[form_title]),
@@ -165,24 +171,24 @@ def condense_data_to_include_year_range_with_search_terms(table, terms):
         ('max_year', first_row[year])
         ] )
     temp_list.append(first_dict)
-    while start_point < (table_length):
-        for term in terms:
-            if table[start_point][form_num] == term:
-                place_holder = temp_list.pop()
-                if ((table[start_point][form_num] == place_holder[form_num]) & 
-                    (table[start_point][form_title] == place_holder[form_title])):
-                    place_holder['min_year'] = table[start_point][year]
-                    temp_list.append(place_holder)
-                else:    
-                    temp_list.append(place_holder)
-                    temp_dict = dict( [ 
-                        (form_num, table[start_point][form_num]),
-                        (form_title, table[start_point][form_title]),
-                        ('min_year', table[start_point][year]),
-                        ('max_year', table[start_point][year])
-                    ] )
-                    temp_list.append(temp_dict)
-        start_point += 1
+    for i in range(table_length):
+        if table[i][form_num] == term:
+            place_holder = temp_list.pop()
+            if ((table[i][form_num] == place_holder[form_num]) & 
+                (table[i][form_title] == place_holder[form_title])):
+                place_holder['min_year'] = table[i][year]
+                temp_list.append(place_holder)
+            else:    
+                temp_list.append(place_holder)
+                temp_dict = dict( [ 
+                    (form_num, table[i][form_num]),
+                    (form_title, table[i][form_title]),
+                    ('min_year', table[i][year]),
+                    ('max_year', table[i][year])
+                ] )
+                temp_list.append(temp_dict)
+    if temp_list[0][form_num] != term:
+        del temp_list[0]
     return temp_list
 
 def condense_data_to_include_year_range(table):
@@ -225,16 +231,14 @@ def condense_data_to_include_year_range(table):
 
 
 if __name__ == "__main__":
-    
+    print("Please enter what forms you want returned. Seperate each form with a comma.")
+    choice = input("Terms: ")
+    search_for = clean_search_terms(choice)
     access_object = IRSWebAccessor()
-    search_for = ["Form W-2","(KO)"]
     access_object.scrape_by_search_terms(search_for)
-    print(len(access_object.search_data))
-    print(access_object.search_data[:10])
-    print(access_object.search_data[-10:])
-    print(len(access_object.cleaned_data))
-    print(access_object.cleaned_data[:5])
-    print(access_object.cleaned_data[-5:])
+    print("Please enter the name of the file you want the data written to (ex: test_form.json)")
+    file_name = input("File name: ")
+    access_object.write_to_json(file_name)
     access_object.clear()
 
     
