@@ -7,10 +7,11 @@ import json
 import os
 
 descending = "&isDescending=false"
+parser = 'html.parser'
 
 class IRSWebAccessor:
     irs_url = "https://apps.irs.gov/app/picklist/list/priorFormPublication.html?"
-    parser = 'html.parser'
+    parser = parser
     
     
     def __init__(self):
@@ -42,10 +43,11 @@ class IRSWebAccessor:
                 # Get the total number of files
                 total_num_files = get_number_of_documents_from_search(index_soup) 
                 self.search_data += get_pdf_links(table=index_table, term=i, start=start, end=end, num_files=total_num_files)
-
-                
-        # for term in self.search_terms:
-        #     self.cleaned_data += condense_data_to_include_year_range_with_search_terms(table=self.search_data, term=term)
+            number_pdfs_found = len(self.search_data)
+            file_names = get_file_names(number_pdfs_found)
+            for i in range(number_pdfs_found):
+                write_to_pdf(file_name= file_names[i], url= self.search_data[i])
+            print("Writing to files complete.")
 
     def scrape_by_search_terms(self, terms):
         for term in terms:
@@ -74,7 +76,6 @@ class IRSWebAccessor:
         for term in self.search_terms:
             self.cleaned_data += condense_data_to_include_year_range_with_search_terms(table=self.search_data, term=term)
         
-        
     def scrape_all_forms(self):
         end_of_url = "resultsPerPage=200&sortColumn=sortOrder&indexOfFirstRow=0&criteria=&value=&isDescending=false"
         index_page = requests.get(self.irs_url + end_of_url)
@@ -95,7 +96,7 @@ class IRSWebAccessor:
         pathfile = os.path.join(directory,'data', file_name)
         with open(pathfile, 'w') as outfile:
             json.dump(self.cleaned_data, outfile)
-        print("Writing to file complete.")
+        print("Writing to file complete.")     
 
     def clear(self):
         self.search_headers.clear()
@@ -105,6 +106,29 @@ class IRSWebAccessor:
         print("Cleared")
 
 # Helper Methods
+def write_to_pdf(file_name, url):
+    ''' uses URLs in search_data to download pdfs to  
+    pdf file specified within parameters in sibling data file'''
+    directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pathfile = os.path.join(directory,'data', file_name)
+    r = requests.get(url)
+    with open(pathfile, 'wb') as f:
+        f.write(r.content)   
+
+def get_file_names(num_links):
+    '''
+    Parameters: integer 
+    Returns: List of Strings of files to write to
+    '''
+    file_names = []
+    print("There are " + str(num_links) + " PDFs available in that range.")
+    print("I will write these to a current file in the data subfolder. Please supply a name for each (ex: test_1.pdf)")
+    for i in range(num_links):
+        name = input("Name for file " + str(i + 1) + ": ")
+        file_names.append(name)
+    print(file_names)
+    return file_names
+
 def get_pdf_links(table, term, start, end, num_files):
     '''
     Parameters: takes in a soup object, int for year range start, int for year range end
@@ -116,25 +140,20 @@ def get_pdf_links(table, term, start, end, num_files):
         for tr in table.find_all("tr", {'class': ['even', 'odd']}):
             form_num = str(tr.find("td", class_="LeftCellSpacer").get_text(strip=True))
             date = int(tr.find("td", class_="EndCellSpacer").get_text(strip=True))
-            print(form_num + ", " + str(date))
             match = [form_num == term, date >= start, date <= end]
             if all(match):
                 link = str(tr.find('a').get('href'))
                 temp_list.append(link)
-                print(link)
         return temp_list
     links = get_page_links(table, term, start, end)
     if num_files >= 200:
         # web page setting: display 200 results per page
         pages = np.arange(200, (num_files + 1), 200)
-        # keeping track of pages scraped
-        num_pages = 1
         for page in pages:
             page = requests.get("https://apps.irs.gov/app/picklist/list/priorFormPublication.html?resultsPerPage=200&sortColumn=sortOrder&indexOfFirstRow=" + str(page) + "&criteria=formNumber&value=" + term + descending)
-            soup_local = BeautifulSoup(page.content, 'html.parser')
+            soup_local = BeautifulSoup(page.content, parser)
             page_table = soup_local.find("table", class_="picklist-dataTable")
             links += get_page_links(page_table, term, start, end)
-    print("Number of links: " + str(len(links)))
     return links
 
 def clean_year_range(user_input):
@@ -213,7 +232,7 @@ def get_all_pages_from_website(get_all, num_files, data, headers, value):
             page = requests.get("https://apps.irs.gov/app/picklist/list/priorFormPublication.html?resultsPerPage=200&sortColumn=sortOrder&indexOfFirstRow=" + str(page) + "&criteria=&value=&isDescending=false")
         else:
             page = requests.get("https://apps.irs.gov/app/picklist/list/priorFormPublication.html?resultsPerPage=200&sortColumn=sortOrder&indexOfFirstRow=" + str(page) + "&criteria=formNumber&value=" + value + self.descending)
-        soup_local = BeautifulSoup(page.content, 'html.parser')
+        soup_local = BeautifulSoup(page.content, parser)
         page_table = soup_local.find("table", class_="picklist-dataTable")
         data += get_all_rows_of_data_from_page(page_table, headers)
         num_pages += 1
