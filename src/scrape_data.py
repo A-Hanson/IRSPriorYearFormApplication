@@ -5,10 +5,16 @@ from time import sleep
 from random import randint
 import json
 import os
+import csv
 
+# constants used in URL construction
 descending = "&isDescending=false"
 parser = 'html.parser'
 start_of_url = "https://apps.irs.gov/app/picklist/list/priorFormPublication.html?resultsPerPage=200&sortColumn=sortOrder&indexOfFirstRow="
+
+# constant used in file writing
+directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 class IRSWebAccessor:
     irs_url = "https://apps.irs.gov/app/picklist/list/priorFormPublication.html?"
@@ -89,11 +95,11 @@ class IRSWebAccessor:
         total_num_files = get_number_of_documents_from_search(index_soup) 
         get_all_pages_from_website(get_all=True, num_files=total_num_files, data=self.search_data, headers=self.search_headers, value="")
         self.cleaned_data += condense_data_to_include_year_range(table=self.search_data)
+        write_to_csv("irs_prior_year_forms", self.search_headers, self.search_data)
 
     def write_to_json(self, file_name):
         ''' writes data from cleaned search data to 
         json file specified within parameters in sibling data file'''
-        directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         pathfile = os.path.join(directory,'data', file_name)
         with open(pathfile, 'w') as outfile:
             json.dump(self.cleaned_data, outfile)
@@ -107,10 +113,23 @@ class IRSWebAccessor:
         print("Cleared")
 
 # Helper Methods
+def write_to_csv(file_name, headers, table):
+    '''
+    Uses file name given to create new csv in data folder
+    '''
+    pathfile = os.path.join(directory,'data', file_name)
+    with open(pathfile, 'w') as f:
+        writer = csv.DictWriter(f, headers)
+        writer.writeheader()
+        for row in table:
+            if row:
+                writer.writerow(row)
+    print("CSV written")
+
+
 def write_to_pdf(file_name, url):
     ''' uses URLs in search_data to download pdfs to  
     pdf file specified within parameters in sibling data file'''
-    directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     pathfile = os.path.join(directory,'data', file_name)
     r = requests.get(url)
     with open(pathfile, 'wb') as f:
@@ -324,6 +343,9 @@ def condense_data_to_include_year_range(table):
 
 
 if __name__ == "__main__":
+    a = IRSWebAccessor()
+    a.scrape_all_forms()
+    '''
     print("Please select what you want to do: ")
     print("1. Download a json of search results")
     print("2. Download individual pdfs of forms in year range")
@@ -348,6 +370,7 @@ if __name__ == "__main__":
         access_object.scrape_by_search_term_and_year_range(search_for, year_start, year_end)
     else:
         print("Sorry, didn't understand that.")
+    '''
 
     
     
